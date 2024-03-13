@@ -33,8 +33,8 @@ similarity_score = model.wv.similarity(word1, word2)
 print(f"Simularite entre les mots '{word1}' et '{word2}': {similarity_score}")
 
 
-# par exemple le mots centrale donné est morocco
-central_word = "morocco"
+# par exemple le mots centrale donné est marramech
+central_word = "Marrakech"
 
 # Extraire les mots contextuels les plus similaires
 similar_words = model.wv.most_similar(positive=[central_word])
