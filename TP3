@@ -1,0 +1,114 @@
+import pandas as pd
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+import string
+from gensim.models import Word2Vec
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+
+
+# Charger les données dans un DataFrame pandas
+data = pd.read_csv("/kaggle/input/movie-review/movie_review.csv")  # Assurez-vous de remplacer "chemin/vers/le/fichier.csv" par le chemin réel du fichier CSV
+
+# Liste des stop words en anglais
+stop_words = set(stopwords.words('english'))
+
+def preprocess_text(text):
+    # Convertir le texte en minuscules
+    text = text.lower()
+    
+    # Tokenization des mots
+    tokens = word_tokenize(text)
+    
+    # Suppression de la ponctuation
+    table = str.maketrans('', '', string.punctuation)
+    tokens = [word.translate(table) for word in tokens]
+    
+    # Suppression des stop words
+    tokens = [word for word in tokens if word not in stop_words]
+    
+    # Reconstitution du texte prétraité
+    preprocessed_text = ' '.join(tokens)
+    
+    return preprocessed_text
+
+# Appliquer la fonction de prétraitement au DataFrame
+data['text'] = data['text'].apply(preprocess_text)
+
+
+
+# Créer une liste de listes de mots pour l'entraînement Word2Vec
+sentences = [text.split() for text in data['text']]
+
+# Paramètres du modèle Word2Vec
+vector_size = 100  # Taille des vecteurs de mots
+window = 5  # Fenêtre contextuelle pour l'entraînement
+min_count = 1  # Nombre minimum d'occurrences d'un mot pour être inclus dans le vocabulaire
+workers = 4  # Nombre de threads à utiliser lors de l'entraînement
+
+# Entraîner le modèle Word2Vec
+model = Word2Vec(sentences, vector_size=vector_size, window=window, min_count=min_count, workers=workers)
+
+# Sauvegarder le modèle entraîné
+model.save("word2vec_model.bin")
+
+# Vous pouvez également charger le modèle sauvegardé plus tard avec :
+#model = Word2Vec.load("word2vec_model.bin")
+
+# Fonction pour obtenir le vecteur moyen d'une review
+def get_average_vector(words, model, vector_size):
+    # Initialiser un vecteur de zéros
+    average_vector = np.zeros((vector_size,), dtype="float32")
+    # Compter le nombre de mots présents dans le modèle
+    count = 0.
+    # Parcourir chaque mot dans la liste de mots
+    for word in words:
+        # Vérifier si le mot est dans le vocabulaire du modèle
+        if word in model.wv.key_to_index:
+            # Ajouter le vecteur du mot au vecteur moyen
+            average_vector = np.add(average_vector, model.wv[word])
+            # Incrémenter le compteur
+            count += 1
+    # Si aucun mot n'est présent dans le modèle, renvoyer le vecteur nul
+    if count != 0:
+        average_vector = np.divide(average_vector, count)
+    return average_vector
+
+# Appliquer la fonction get_average_vector à chaque review
+data['vector'] = data['text'].apply(lambda x: get_average_vector(x.split(), model, vector_size))
+
+# Afficher un aperçu des données avec les vecteurs
+print(data.head())
+
+
+# Diviser les données en features (X) et labels (y)
+X = data['vector'].to_numpy()  # Utiliser les vecteurs comme features
+Y = data['tag'].to_numpy()  # Utiliser les tags comme labels
+
+# Diviser les données en ensembles d'entraînement et de test (80% train, 20% test)
+X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2)
+
+# Aplatir les vecteurs représentant chaque review
+X_train_flat = [vector.flatten() for vector in X_train]
+X_test_flat = [vector.flatten() for vector in X_test]
+
+# Initialiser le modèle de régression logistique
+logistic_regression_model = LogisticRegression()
+
+# Entraîner le modèle sur les données d'entraînement
+logistic_regression_model.fit(X_train_flat, y_train)
+
+# Faire des prédictions sur l'ensemble de test
+predictions = logistic_regression_model.predict(X_test_flat)
+
+# Évaluer les performances du modèle
+from sklearn.metrics import accuracy_score, classification_report
+
+# Calculer l'exactitude du modèle
+accuracy = accuracy_score(y_test, predictions)
+print("Exactitude du modèle de régression logistique :", accuracy)
+
+# Afficher le rapport de classification
+print("\nRapport de classification :\n",classification_report(y_test,predictions))
