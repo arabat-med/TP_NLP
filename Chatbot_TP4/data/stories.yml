@@ -1,0 +1,9 @@
+version: "3.1"
+
+stories:
+  - story: happy path
+    steps:
+      - intent: greet
+      - action: utter_ask_ingredients
+      - intent: inform_ingredients
+      - action: utter_recommend_recipe
